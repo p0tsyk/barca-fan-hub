@@ -142,6 +142,7 @@ class Lineup(db.Model):
     is_public = db.Column(db.Boolean, nullable=False, default=True)
     likes_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
+    items = db.relationship("LineupItem", cascade="all, delete-orphan", backref="lineup")
 
 
 class LineupItem(db.Model):

@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
 
-from .models import Match, Player, Post, Product, Source
+from .auth import require_auth
+from .extensions import db
+from .models import Lineup, LineupItem, Match, Player, Post, Product, Source
 
 api = Blueprint("api", __name__)
 
@@ -49,3 +51,75 @@ def list_players():
 def list_products():
     return jsonify([p.to_dict() for p in
                     Product.query.filter_by(is_available=True).all()])
+
+
+@api.post("/lineups")
+@require_auth
+def create_lineup():
+    data = request.get_json(silent=True) or {}
+    formation = data.get("formation") or "4-3-3"
+    title = (data.get("title") or f"Мой {formation}")[:120]
+    match_id = data.get("match_id")
+    slots = data.get("slots") or {}  # { "GK": player_id, "ST": player_id, ... }
+
+    if len(slots) != 11:
+        return jsonify({"error": "Нужно ровно 11 игроков"}), 400
+
+    lineup = Lineup(user_id=request.user_id, match_id=match_id,
+                    formation=formation, title=title)
+    db.session.add(lineup)
+    db.session.flush()
+
+    for role_label, player_id in slots.items():
+        if player_id is None:
+            continue
+        player = Player.query.get(player_id)
+        if not player:
+            return jsonify({"error": f"Игрок #{player_id} не найден"}), 404
+        db.session.add(LineupItem(
+            lineup_id=lineup.id, player_id=player.id,
+            role_label=role_label[:10], x=0, y=0,
+        ))
+    db.session.commit()
+    return jsonify({"id": lineup.id, "title": lineup.title, "formation": lineup.formation}), 201
+
+
+@api.get("/lineups")
+@require_auth
+def my_lineups():
+    items = Lineup.query.filter_by(user_id=request.user_id).order_by(
+        Lineup.created_at.desc()).all()
+    return jsonify([_lineup_dict(l) for l in items])
+
+
+@api.get("/lineups/<int:lid>")
+def get_lineup(lid):
+    l = Lineup.query.get_or_404(lid)
+    return jsonify(_lineup_dict(l, with_items=True))
+
+
+@api.delete("/lineups/<int:lid>")
+@require_auth
+def delete_lineup(lid):
+    l = Lineup.query.get_or_404(lid)
+    if l.user_id != request.user_id:
+        return jsonify({"error": "Не твой состав"}), 403
+    db.session.delete(l)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+def _lineup_dict(l, with_items=False):
+    d = {"id": l.id, "title": l.title, "formation": l.formation,
+         "match_id": l.match_id, "is_public": l.is_public,
+         "likes_count": l.likes_count,
+         "created_at": str(l.created_at),
+         "author": l.user.username if l.user else None}
+    if with_items:
+        d["items"] = [
+            {"id": it.id, "player_id": it.player_id,
+             "role_label": it.role_label, "x": it.x, "y": it.y,
+             "player": it.player.to_dict() if it.player else None}
+            for it in l.items
+        ]
+    return d
