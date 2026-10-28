@@ -27,5 +27,5 @@ def create_app():
     app.register_blueprint(api, url_prefix="/api")
 
     with app.app_context():
-        db.create_all()  # таблицы уже созданы в Supabase — создаст только недостающие
+        db.create_all()  
     return app
