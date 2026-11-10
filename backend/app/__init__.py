@@ -16,8 +16,15 @@ def create_app():
         "DATABASE_URL",
         "postgresql://postgres:postgres@localhost:5432/barca_fan_hub",
     )
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "connect_args": {"prepare_threshold": None},
+        "pool_pre_ping": True,
+    }
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-change-me")
+    
+    # ЖЕСТКО ЗАДАЕМ КЛЮЧ, ЧТОБЫ ИСКЛЮЧИТЬ ОШИБКИ ЧТЕНИЯ .ENV
+    app.config["SECRET_KEY"] = "sb_secret_ochensecretno"
+    
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
 
     db.init_app(app)

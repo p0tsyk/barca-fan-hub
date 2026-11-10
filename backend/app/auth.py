@@ -1,14 +1,17 @@
-from datetime import datetime, timedelta, timezone
 from functools import wraps
+import secrets
 
-import jwt
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .extensions import db
 from .models import User
 
 auth = Blueprint("auth", __name__)
+
+# Серверное хранилище токенов: токен -> данные пользователя.
+# Живёт в памяти: после перезапуска Flask нужно войти заново.
+TOKENS = {}
 
 
 @auth.post("/register")
@@ -36,12 +39,8 @@ def login():
     user = User.query.filter_by(email=email).first()
     if not user or not check_password_hash(user.password_hash, password):
         return jsonify({"error": "Неверный email или пароль"}), 401
-    token = jwt.encode(
-        {"sub": user.id, "username": user.username,
-         "exp": datetime.now(timezone.utc) + timedelta(days=1)},
-        current_app.config["SECRET_KEY"],
-        algorithm="HS256",
-    )
+    token = secrets.token_hex(32)
+    TOKENS[token] = {"sub": user.id, "username": user.username}
     return jsonify({"token": token, "username": user.username})
 
 
@@ -52,11 +51,9 @@ def require_auth(fn):
         header = request.headers.get("Authorization", "")
         if not header.startswith("Bearer "):
             return jsonify({"error": "Нужен токен"}), 401
-        try:
-            payload = jwt.decode(header[7:], current_app.config["SECRET_KEY"],
-                                 algorithms=["HS256"])
-        except jwt.PyJWTError:
-            return jsonify({"error": "Токен недействителен"}), 401
+        payload = TOKENS.get(header[7:])
+        if payload is None:
+            return jsonify({"error": "Токен недействителен. Войдите заново"}), 401
         request.user_id = payload["sub"]
         request.username = payload["username"]
         return fn(*args, **kwargs)

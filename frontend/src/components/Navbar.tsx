@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { useCart } from "../cart";
 
 const links = [
   { to: "/", label: "Home" },
@@ -13,6 +14,7 @@ const links = [
 
 export default function Navbar() {
   const { username, logout } = useAuth();
+  const { count } = useCart();
   const navigate = useNavigate();
 
   return (
@@ -25,6 +27,9 @@ export default function Navbar() {
             {l.label}
           </NavLink>
         ))}
+        <NavLink to="/cart" className={({ isActive }) => (isActive ? "active" : "")}>
+  Корзина ({count})
+</NavLink>
       </nav>
       <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
         {username ? (
@@ -43,4 +48,5 @@ export default function Navbar() {
       </div>
     </header>
   );
+  
 }

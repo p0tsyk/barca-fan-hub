@@ -142,7 +142,9 @@ class Lineup(db.Model):
     is_public = db.Column(db.Boolean, nullable=False, default=True)
     likes_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
-    items = db.relationship("LineupItem", cascade="all, delete-orphan", backref="lineup")
+
+    items = db.relationship("LineupItem", cascade="all, delete-orphan",
+                            backref="lineup")
 
 
 class LineupItem(db.Model):
@@ -168,9 +170,14 @@ class Product(db.Model):
     image_url = db.Column(db.Text)
     is_available = db.Column(db.Boolean, nullable=False, default=True)
 
+    variants = db.relationship("ProductVariant", cascade="all, delete-orphan")
+
     def to_dict(self):
         return {"id": self.id, "name": self.name, "price": float(self.price),
-                "category": self.category, "is_available": self.is_available}
+                "category": self.category, "is_available": self.is_available,
+                "description": self.description,
+                "variants": [{"id": v.id, "size": v.size, "stock": v.stock}
+                             for v in self.variants]}
 
 
 class ProductVariant(db.Model):
@@ -182,12 +189,18 @@ class ProductVariant(db.Model):
     size = db.Column(db.String(10), nullable=False)
     stock = db.Column(db.Integer, nullable=False, default=0)
 
+    product = db.relationship("Product")
+
 
 class DeliveryRegion(db.Model):
     __tablename__ = "delivery_regions"
     id = db.Column(db.Integer, primary_key=True)
     region = db.Column(db.String(40), unique=True, nullable=False)
     base_price = db.Column(db.Numeric(10, 2), nullable=False)
+
+    def to_dict(self):
+        return {"id": self.id, "region": self.region,
+                "base_price": float(self.base_price)}
 
 
 class Order(db.Model):
@@ -200,6 +213,10 @@ class Order(db.Model):
     total_price = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     tracking_number = db.Column(db.String(60))
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
+
+    region = db.relationship("DeliveryRegion")
+    items = db.relationship("OrderItem", cascade="all, delete-orphan",
+                            backref="order")
 
 
 class OrderItem(db.Model):
